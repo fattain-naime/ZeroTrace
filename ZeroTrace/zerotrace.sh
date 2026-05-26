@@ -108,6 +108,7 @@ setup_network_rules() {
     # Set up NAT rules for Tor routing
     iptables -t nat -A OUTPUT -m owner --uid-owner "$TOR_USER" -j RETURN
     iptables -t nat -A OUTPUT -p udp --dport "$DNS_PORT" -j REDIRECT --to-ports "$DNS_PORT"
+    iptables -t nat -A OUTPUT -p tcp --dport 53 -j REDIRECT --to-ports "$DNS_PORT"
 
     # Exclude specified networks from Tor routing
     for network in "${EXCLUDED_IPS[@]}"; do
@@ -115,13 +116,19 @@ setup_network_rules() {
     done
 
     # Redirect all other TCP traffic through Tor
-    iptables -t nat -A OUTPUT -p tcp --syn -j REDIRECT --to-ports "$TOR_PORT"
+    iptables -t nat -A OUTPUT ! -o lo -p tcp --syn -j REDIRECT --to-ports "$TOR_PORT"
     
+    # Allow loopback traffic
+    iptables -A OUTPUT -o lo -j ACCEPT
+
     # Allow established connections and excluded networks
     iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
     for network in "${EXCLUDED_IPS[@]}"; do
         iptables -A OUTPUT -d "$network" -j ACCEPT
     done
+
+    # Block all UDP traffic (Tor does not support UDP)
+    iptables -A OUTPUT -p udp -j DROP
 
     # Allow Tor user traffic and reject all other traffic
     iptables -A OUTPUT -m owner --uid-owner "$TOR_USER" -j ACCEPT
