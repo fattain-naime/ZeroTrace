@@ -12,7 +12,6 @@ EXCLUDED_IPS=("127.0.0.0/9" "127.128.0.0/10" "127.0.0.0/8")  # IPs to exclude
 TOR_PORT="9040"  # Tor transparent proxy port
 TOR_CONFIG='/etc/tor/torrc'  # Tor configuration file path
 LOG_FILE="zerotrace.log"  # Log file path
-updated_packages=0 # update detection flag
 
 # Detect Linux distribution
 detect_distribution() {
@@ -90,7 +89,7 @@ setup_network_rules() {
 
     restart_tor_service() {
         if [ "$DISTRO" = "debian" ] || [ "$DISTRO" = "fedora" ] || [ "$DISTRO" = "arch" ]; then
-            if systemctl restart tor >/dev/null 2>&1; then
+            if systemctl restart tor >/dev/null 2>&1 || systemctl restart tor@default >/dev/null 2>&1; then
                 echo -e " \033[92m[+]\033[0m ZeroTrace: Privacy mode \033[92m[ACTIVE]\033[0m"
                 show_current_ip
             else
@@ -218,7 +217,6 @@ install_tor() {
     if command -v tor >/dev/null 2>&1; then
         return 0
     fi
-    updated_packages=1
 
     echo " [*] Tor is not installed. Attempting to install Tor..."
 
@@ -252,7 +250,6 @@ install_jq() {
     if command -v jq >/dev/null 2>&1; then
         return 0
     fi
-    updated_packages=1
 
     echo " [*] jq is not installed. Attempting to install jq..."
 
@@ -286,7 +283,6 @@ install_iptables() {
     if command -v iptables >/dev/null 2>&1; then
         return 0
     fi
-    updated_packages=1
 
     echo " [*] iptables is not installed. Attempting to install iptables..."
 
@@ -316,52 +312,6 @@ install_iptables() {
     fi
 }
 
-check_reboot_required() {
-    reboot_needed=0
-
-    current_kernel="$(uname -r)"
-    latest_kernel="$(ls /lib/modules 2>/dev/null | sort -V | tail -n1)"
-
-    # Debian-based reboot flag
-    [ -f /var/run/reboot-required ] && reboot_needed=1
-
-    # Kernel mismatch detection
-    if [ -n "$latest_kernel" ] && [ "$current_kernel" != "$latest_kernel" ]; then
-        reboot_needed=1
-    fi
-
-    # RHEL/Fedora reboot detection
-    if command -v needs-restarting >/dev/null 2>&1; then
-        needs-restarting -r >/dev/null 2>&1
-        [ $? -eq 1 ] && reboot_needed=1
-    fi
-
-    # Arch Linux: always recommend reboot
-    if [ "$DISTRO" = "arch" ] && [ "$updated_packages" -eq 1 ]; then
-         reboot_needed=1
-    fi
-
-    if [ "$reboot_needed" -eq 1 ]; then
-        echo -e "\033[93m[!]\033[0m ZeroTrace: Reboot recommended!"
-        echo -e "\033[93m[!]\033[0m Recent system upgrades may leave old libraries"
-        echo -e "\033[93m[!]\033[0m or networking components loaded in memory."
-        echo -e "\033[93m[!]\033[0m Tor routing or firewall rules may not work correctly."
-        echo
-
-        read -rp "Reboot now? [y/N]: " answer
-
-        case "$answer" in
-            [Yy]|[Yy][Ee][Ss])
-                echo -e "\033[92m[+]\033[0m Rebooting..."
-                reboot
-                ;;
-            *)
-                echo -e "\033[93m[!]\033[0m Continuing without reboot."
-                ;;
-        esac
-    fi
-}
-
 main() {
     check_bash
     check_root
@@ -378,8 +328,6 @@ main() {
          exit 1
     fi
    
-    [ "$updated_packages" -eq 1 ] && check_reboot_required
- 
     # If no arguments provided, show usage
     if [ $# -eq 0 ]; then
         show_usage
