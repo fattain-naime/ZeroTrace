@@ -1,6 +1,6 @@
-# ZeroTrace
+# GhostRoute
 
-ZeroTrace is a powerful ethical hacking tool for anonymization, developed in Bash. It helps you stay anonymous online by routing all of your system’s network traffic—not just browser traffic—through the Tor network. As a result, tracking your online activity, IP address, and location becomes extremely difficult.
+GhostRoute is a powerful ethical hacking tool for anonymization, developed in Bash. It helps you stay anonymous online by routing all of your system’s network traffic—not just browser traffic—through the Tor network. As a result, tracking your online activity, IP address, and location becomes extremely difficult.
 
 ---
 
@@ -32,15 +32,15 @@ This tool is made only for ethical hacking, privacy, and educational use. Do not
 
 1. **Clone the repository:**
 ```bash
-git clone https://github.com/s-r-e-e-r-a-j/ZeroTrace.git
+git clone https://github.com/s-r-e-e-r-a-j/GhostRoute.git
 ```
-2. **Navigate to the ZeroTrace directory:**
+2. **Navigate to the GhostRoute directory:**
 ```bash
-cd ZeroTrace
+cd GhostRoute
 ```
-3. **Navigate to the ZeroTrace directory:**
+3. **Navigate to the GhostRoute directory:**
 ```bash
-cd ZeroTrace
+cd GhostRoute
 ```
 4. **Run the install.sh script:**
 ```bash
@@ -52,7 +52,7 @@ sudo bash install.sh
 
 **Run with sudo:**
 ```bash
-sudo zerotrace [option]
+sudo ghostroute [option]
 ```
 ---
 
@@ -73,30 +73,30 @@ sudo zerotrace [option]
 **Start routing:**
 
 ```bash
-sudo zerotrace --start
+sudo ghostroute --start
 ```
 
 **Show current IP:**
 
 ```bash
-sudo zerotrace --ip
+sudo ghostroute --ip
 ```
 **Request a new IP:**
 
 ```bash
-sudo zerotrace --new-ip
+sudo ghostroute --new-ip
 ```
 
 **Auto change IP every 5 minutes:**
 
 ```bash
-sudo zerotrace --auto 300
+sudo ghostroute --auto 300
 ```
 
 **Stop and reset:**
 
 ```bash
-sudo zerotrace --stop
+sudo ghostroute --stop
 ```
 ---
 

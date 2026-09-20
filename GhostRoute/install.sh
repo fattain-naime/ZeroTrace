@@ -16,22 +16,22 @@ choice=$(echo "$choice" | tr '[:upper:]' '[:lower:]')
 
 if [[ "$choice" == "y" ]]; then
     chmod 755 zerotrace.sh
-    mkdir -p /usr/share/zerotrace
-    cp zerotrace.sh /usr/share/zerotrace/zerotrace.sh
+    mkdir -p /usr/share/ghostroute
+    cp zerotrace.sh /usr/share/ghostroute/ghostroute.sh
 
     # Shell wrapper
-    echo -e "#!/usr/bin/env bash\nexec /usr/share/zerotrace/zerotrace.sh \"\$@\"" > /usr/bin/zerotrace
+    echo -e "#!/usr/bin/env bash\nexec /usr/share/ghostroute/ghostroute.sh \"\$@\"" > /usr/bin/ghostroute
 
-    chmod +x /usr/bin/zerotrace
-    chmod +x /usr/share/zerotrace/zerotrace.sh
+    chmod +x /usr/bin/ghostroute
+    chmod +x /usr/share/ghostroute/ghostroute.sh
 
-    echo -e "\n\n[✔] ZeroTrace installed successfully!"
-    echo -e "[→] Now you can run it by typing: \e[6;30;42mzerotrace\e[0m\n"
+    echo -e "\n\n[✔] GhostRoute installed successfully!"
+    echo -e "[→] Now you can run it by typing: \e[6;30;42mghostroute\e[0m\n"
 
 elif [[ "$choice" == "n" ]]; then
-    rm -rf /usr/share/zerotrace
-    rm -f /usr/bin/zerotrace
-    echo "[✔] ZeroTrace has been removed successfully."
+    rm -rf /usr/share/ghostroute
+    rm -f /usr/bin/ghostroute
+    echo "[✔] GhostRoute has been removed successfully."
 
 else
     echo "[!] Invalid choice. Please enter Y or N."

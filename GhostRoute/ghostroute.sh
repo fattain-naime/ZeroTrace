@@ -11,7 +11,7 @@ EXCLUDED_NETWORKS=("192.168.0.0/16" "172.16.0.0/12") # Networks to exclude from 
 EXCLUDED_IPS=("127.0.0.0/9" "127.128.0.0/10" "127.0.0.0/8")  # IPs to exclude
 TOR_PORT="9040"  # Tor transparent proxy port
 TOR_CONFIG='/etc/tor/torrc'  # Tor configuration file path
-LOG_FILE="zerotrace.log"  # Log file path
+LOG_FILE="ghostroute.log"  # Log file path
 
 # Detect Linux distribution
 detect_distribution() {
@@ -43,7 +43,7 @@ fi
 
 # Configuration to append to torrc file
 TOR_CONFIG_CONTENT="
-## Added by $(basename "$0") for ZeroTrace (Tor routing)
+## Added by $(basename "$0") for GhostRoute (Tor routing)
 ## Routes all traffic through Tor on port $TOR_PORT
 VirtualAddrNetwork $TOR_NETWORK
 AutomapHostsOnResolve 1
@@ -90,7 +90,7 @@ setup_network_rules() {
     restart_tor_service() {
         if [ "$DISTRO" = "debian" ] || [ "$DISTRO" = "fedora" ] || [ "$DISTRO" = "arch" ]; then
             if systemctl restart tor >/dev/null 2>&1 || systemctl restart tor@default >/dev/null 2>&1; then
-                echo -e " \033[92m[+]\033[0m ZeroTrace: Privacy mode \033[92m[ACTIVE]\033[0m"
+                echo -e " \033[92m[+]\033[0m GhostRoute: Privacy mode \033[92m[ACTIVE]\033[0m"
                 show_current_ip
             else
                 echo -e "\033[91m[!]\033[0m Failed to restart Tor"
@@ -133,7 +133,7 @@ setup_network_rules() {
     iptables -A OUTPUT -m owner --uid-owner "$TOR_USER" -j ACCEPT
     iptables -A OUTPUT -j REJECT
 
-    log_message "[+] ZeroTrace: Network rules configured for Tor routing"
+    log_message "[+] GhostRoute: Network rules configured for Tor routing"
 }
 
 get_location_info() {
@@ -149,7 +149,7 @@ get_location_info() {
 }
 
 show_current_ip() {
-    echo -e " \033[93m[*]\033[0m ZeroTrace: Fetching public IP address..."
+    echo -e " \033[93m[*]\033[0m GhostRoute: Fetching public IP address..."
     public_ip=""
     
     # Try to get IP from Tor project API
@@ -158,7 +158,7 @@ show_current_ip() {
             public_ip=$(echo "$response" | jq -r '.IP // empty')
             [ -n "$public_ip" ] && break
         fi
-        echo -e " \033[93m[?]\033[0m ZeroTrace: Waiting for IP address..."
+        echo -e " \033[93m[?]\033[0m GhostRoute: Waiting for IP address..."
         sleep 5
     done
     
@@ -170,21 +170,21 @@ show_current_ip() {
     fi
     
     if [ -z "$public_ip" ]; then
-        echo -e "\033[91m[!]\033[0m ZeroTrace: Could not determine public IP address!"
+        echo -e "\033[91m[!]\033[0m GhostRoute: Could not determine public IP address!"
         exit 1
     fi
 
     # Display IP and location information
     IFS=, read -r country city <<< "$(get_location_info "$public_ip")"
     if [ -n "$country" ] && [ -n "$city" ]; then
-        echo -e " \033[92m[+]\033[0m ZeroTrace: Your IP: \033[92m$public_ip\033[0m"
-        echo -e " \033[92m[+]\033[0m ZeroTrace: Location: \033[92m$country, $city\033[0m"
-        log_message "[+] ZeroTrace: Current IP: $public_ip"
-        log_message "[+] ZeroTrace: Location: $country, $city"
+        echo -e " \033[92m[+]\033[0m GhostRoute: Your IP: \033[92m$public_ip\033[0m"
+        echo -e " \033[92m[+]\033[0m GhostRoute: Location: \033[92m$country, $city\033[0m"
+        log_message "[+] GhostRoute: Current IP: $public_ip"
+        log_message "[+] GhostRoute: Location: $country, $city"
     else
-        echo -e " \033[92m[+]\033[0m ZeroTrace: Your IP: \033[92m$public_ip\033[0m"
-        echo -e " \033[93m[!]\033[0m ZeroTrace: Could not determine location"
-        log_message "[+] ZeroTrace: Current IP: $public_ip"
+        echo -e " \033[92m[+]\033[0m GhostRoute: Your IP: \033[92m$public_ip\033[0m"
+        echo -e " \033[93m[!]\033[0m GhostRoute: Could not determine location"
+        log_message "[+] GhostRoute: Current IP: $public_ip"
     fi
 }
 
@@ -343,8 +343,8 @@ main() {
                 ;;
             -x|--stop)
                 reset_network_rules
-                echo -e " \033[93m[!]\033[0m ZeroTrace: Privacy mode \033[91m[INACTIVE]\033[0m"
-                log_message "[!] ZeroTrace: Privacy mode deactivated"
+                echo -e " \033[93m[!]\033[0m GhostRoute: Privacy mode \033[91m[INACTIVE]\033[0m"
+                log_message "[!] GhostRoute: Privacy mode deactivated"
                 shift
                 ;;
             -n|--new-ip)
@@ -362,10 +362,10 @@ main() {
                     show_usage
                     exit 1
                 fi
-                echo -e " \033[92m[+]\033[0m ZeroTrace: Auto IP switching enabled. Interval: $interval seconds"
+                echo -e " \033[92m[+]\033[0m GhostRoute: Auto IP switching enabled. Interval: $interval seconds"
                 while true; do
                     change_ip_address
-                    echo -e " \033[92m[*]\033[0m ZeroTrace: Successfully changed IP address\n"
+                    echo -e " \033[92m[*]\033[0m GhostRoute: Successfully changed IP address\n"
                     sleep "$interval"
                 done
                 # We don't shift 2 here because we're in an infinite loop
@@ -384,11 +384,11 @@ main() {
 }
 
 show_usage() {
-    echo "Usage: zerotrace [OPTION]"
+    echo "Usage: ghostroute [OPTION]"
     echo
     echo "Options:"
-    echo "  -s, --start       Start ZeroTrace (route traffic through Tor)"
-    echo "  -x, --stop        Stop ZeroTrace and reset network rules"
+    echo "  -s, --start       Start GhostRoute (route traffic through Tor)"
+    echo "  -x, --stop        Stop GhostRoute and reset network rules"
     echo "  -n, --new-ip      Get a new IP address through Tor"
     echo "  -i, --ip          Show current public IP address"
     echo "  -a, --auto [SEC]  Automatically change IP at regular intervals (default: 500)"
