@@ -15,9 +15,9 @@ read -p "[+] To install press (Y) | To uninstall press (N) >> " choice
 choice=$(echo "$choice" | tr '[:upper:]' '[:lower:]')
 
 if [[ "$choice" == "y" ]]; then
-    chmod 755 zerotrace.sh
+    chmod 755 ghostroute.sh
     mkdir -p /usr/share/ghostroute
-    cp zerotrace.sh /usr/share/ghostroute/ghostroute.sh
+    cp ghostroute.sh /usr/share/ghostroute/ghostroute.sh
 
     # Shell wrapper
     echo -e "#!/usr/bin/env bash\nexec /usr/share/ghostroute/ghostroute.sh \"\$@\"" > /usr/bin/ghostroute
