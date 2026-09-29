@@ -8,7 +8,7 @@ DNS_PORT="53"  # DNS port for Tor
 TOR_NETWORK="10.0.0.0/10"  # Virtual network for Tor
 LOCALHOST="127.0.0.1"  # Local loopback address
 EXCLUDED_NETWORKS=("192.168.0.0/16" "172.16.0.0/12") # Networks to exclude from Tor
-EXCLUDED_IPS=("127.0.0.0/9" "127.128.0.0/10" "127.0.0.0/8")  # IPs to exclude
+EXCLUDED_IPS=("127.0.0.0/8")  # IPs to exclude
 TOR_PORT="9040"  # Tor transparent proxy port
 TOR_CONFIG='/etc/tor/torrc'  # Tor configuration file path
 LOG_FILE="ghostroute.log"  # Log file path
@@ -74,22 +74,133 @@ enable_ipv6() {
     sysctl -w net.ipv6.conf.default.disable_ipv6=0 >/dev/null
 }
 
+enable_doh() {
+    log_message "[*] Re-enabling DNS over HTTPS (DoH) settings..."
+
+    if [ -f /etc/systemd/resolved.conf.d/disable-doh.conf ]; then
+        rm -f /etc/systemd/resolved.conf.d/disable-doh.conf
+        if systemctl is-active --quiet systemd-resolved 2>/dev/null; then
+            systemctl restart systemd-resolved >/dev/null 2>&1
+        fi
+        log_message "[+] Restored default DNSOverTLS setting in systemd-resolved"
+    fi
+
+    if [ -f /etc/firefox/policies/policies.json ]; then
+        rm -f /etc/firefox/policies/policies.json
+        log_message "[+] Removed Firefox DoH disable policy"
+    fi
+
+    if [ -f /etc/opt/chrome/policies/managed/doh_policy.json ]; then
+        rm -f /etc/opt/chrome/policies/managed/doh_policy.json
+    fi
+    if [ -f /etc/chromium/policies/managed/doh_policy.json ]; then
+        rm -f /etc/chromium/policies/managed/doh_policy.json
+    fi
+    log_message "[+] Removed Chromium/Chrome DoH disable policy"
+
+    if command -v nft >/dev/null 2>&1; then
+        nft delete set inet ghostroute doh_providers 2>/dev/null || true
+    fi
+
+    log_message "[+] DNS over HTTPS settings restored to system defaults"
+}
+
+
+disable_doh() {
+    log_message "[*] Configuring rules to disable DNS over HTTPS (DoH)..."
+
+    if systemctl is-active --quiet systemd-resolved 2>/dev/null; then
+        mkdir -p /etc/systemd/resolved.conf.d
+        cat <<EOF > /etc/systemd/resolved.conf.d/disable-doh.conf
+[Resolve]
+DNSOverTLS=no
+EOF
+        systemctl restart systemd-resolved >/dev/null 2>&1
+        log_message "[+] Disabled DNSOverTLS in systemd-resolved"
+    fi
+
+    # Forces Firefox to set DoH policy to "Disabled" (Mode 0)
+    local firefox_policy_dir="/etc/firefox/policies"
+    mkdir -p "$firefox_policy_dir"
+    cat <<EOF > "$firefox_policy_dir/policies.json"
+{
+  "policies": {
+    "DNSOverHTTPS": {
+      "Enabled": false,
+      "Locked": true
+    }
+  }
+}
+EOF
+    log_message "[+] Enforced Firefox DoH disable policy"
+
+    # Forces Chromium/Google Chrome/Brave to disable Secure DNS
+    local chrome_policy_dir="/etc/opt/chrome/policies/managed"
+    local chromium_policy_dir="/etc/chromium/policies/managed"
+    mkdir -p "$chrome_policy_dir" "$chromium_policy_dir"
+
+    cat <<EOF > "$chrome_policy_dir/doh_policy.json"
+{
+  "DnsOverHttpsMode": "off"
+}
+EOF
+    cp "$chrome_policy_dir/doh_policy.json" "$chromium_policy_dir/doh_policy.json" 2>/dev/null || true
+    log_message "[+] Enforced Chromium/Chrome DoH disable policy"
+
+   # Apply Firewall Blocks for Major Public DoH Resolver IPs on Port 443
+    if command -v nft >/dev/null 2>&1; then
+        nft -f - <<EOF >/dev/null 2>&1 || true
+table inet ghostroute {
+    set doh_providers {
+        type ipv4_addr
+        flags interval
+        elements = {
+            1.1.1.1, 1.0.0.1,         # Cloudflare
+            8.8.8.8, 8.8.4.4,         # Google
+            9.9.9.9, 149.112.112.112, # Quad9
+            208.67.222.222, 208.67.220.220 # OpenDNS
+        }
+    }
+
+    chain output_filter {
+        # Drop direct HTTPS connections to known DoH IPs
+        ip daddr @doh_providers tcp dport 443 drop
+    }
+}
+EOF
+        log_message "[+] Added nftables rule to drop direct connections to public DoH IPs"
+    fi
+
+    log_message "[+] DNS over HTTPS successfully disabled across system and browsers"
+}
+
 
 reset_network_rules() {
+    # Re-enable IPv6 when resetting rules
     enable_ipv6
-    iptables -F
-    iptables -t nat -F
+    # Enable DNS over HTTPS
+    enable_doh
+    # Completely delete our custom nftables table
+    nft delete table ip ghostroute__gr 2>/dev/null || true
+    
     log_message "[+] Cleared all network rules"
 }
 
 setup_network_rules() {
     reset_network_rules
     EXCLUDED_IPS+=("${EXCLUDED_NETWORKS[@]}")
+    
+    # Disable IPv6 to prevent leaks
     disable_ipv6
+
+    # Disable DNS over HTTPS to prevent leaks
+    disable_doh
 
     restart_tor_service() {
         if [ "$DISTRO" = "debian" ] || [ "$DISTRO" = "fedora" ] || [ "$DISTRO" = "arch" ]; then
+
             if systemctl restart tor >/dev/null 2>&1 || systemctl restart tor@default >/dev/null 2>&1; then
+
                 echo -e " \033[92m[+]\033[0m GhostRoute: Privacy mode \033[92m[ACTIVE]\033[0m"
                 show_current_ip
             else
@@ -100,41 +211,63 @@ setup_network_rules() {
 
     trap restart_tor_service EXIT
 
-    # Security rules recommended by Tor project
-    iptables -I OUTPUT ! -o lo ! -d "$LOCALHOST" ! -s "$LOCALHOST" -p tcp -m tcp --tcp-flags ACK,FIN ACK,FIN -j DROP
-    iptables -I OUTPUT ! -o lo ! -d "$LOCALHOST" ! -s "$LOCALHOST" -p tcp -m tcp --tcp-flags ACK,RST ACK,RST -j DROP
-    
-    # Set up NAT rules for Tor routing
-    iptables -t nat -A OUTPUT -m owner --uid-owner "$TOR_USER" -j RETURN
-    iptables -t nat -A OUTPUT -p udp --dport "$DNS_PORT" -j REDIRECT --to-ports "$DNS_PORT"
-    iptables -t nat -A OUTPUT -p tcp --dport 53 -j REDIRECT --to-ports "$DNS_PORT"
+    local excluded_set=""
+    if [ ${#EXCLUDED_IPS[@]} -gt 0 ]; then
+        excluded_set=$(IFS=, ; echo "${EXCLUDED_IPS[*]}")
+    fi
 
-    # Exclude specified networks from Tor routing
-    for network in "${EXCLUDED_IPS[@]}"; do
-        iptables -t nat -A OUTPUT -d "$network" -j RETURN
-    done
+    # Load all firewall rules atomically into nftables
+    nft -f - <<EOF
+table ip ghostroute__gr {
 
-    # Redirect all other TCP traffic through Tor
-    iptables -t nat -A OUTPUT ! -o lo -p tcp --syn -j REDIRECT --to-ports "$TOR_PORT"
-    
-    # Allow loopback traffic
-    iptables -A OUTPUT -o lo -j ACCEPT
+    set excluded_nets {
+        type ipv4_addr
+        flags interval
+        elements = { ${excluded_set} }
+    }
+    # NAT OUTPUT
+    chain ghostroute__output__nat {
+        type nat hook output priority dstnat;
+        policy accept;
 
-    # Allow established connections and excluded networks
-    iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
-    for network in "${EXCLUDED_IPS[@]}"; do
-        iptables -A OUTPUT -d "$network" -j ACCEPT
-    done
+        skuid "$TOR_USER" return
 
-    # Block all UDP traffic (Tor does not support UDP)
-    iptables -A OUTPUT -p udp -j DROP
+        oif "lo" return
 
-    # Allow Tor user traffic and reject all other traffic
-    iptables -A OUTPUT -m owner --uid-owner "$TOR_USER" -j ACCEPT
-    iptables -A OUTPUT -j REJECT
+        udp dport $DNS_PORT redirect to :$DNS_PORT
+        tcp dport 53 redirect to :$DNS_PORT
+
+        ip daddr @excluded_nets return
+
+        tcp flags syn redirect to :$TOR_PORT
+    }
+    # FILTER OUTPUT
+    chain ghostroute__output__filter {
+        type filter hook output priority filter;
+        policy drop;
+
+        oif "lo" accept
+
+        oif != "lo" ip daddr != $LOCALHOST ip saddr != $LOCALHOST tcp flags & (ack | fin) == (ack | fin) drop
+
+        oif != "lo" ip daddr != $LOCALHOST ip saddr != $LOCALHOST tcp flags & (ack | rst) == (ack | rst) drop
+
+        ct state established,related accept
+
+        ip daddr @excluded_nets accept
+
+        ip protocol 17 drop
+
+        skuid "$TOR_USER" accept
+
+        reject
+    }
+}
+EOF
 
     log_message "[+] GhostRoute: Network rules configured for Tor routing"
 }
+
 
 get_location_info() {
     local ip_address=$1
@@ -279,8 +412,8 @@ install_jq() {
     fi
 }
 
-install_iptables() {
-    if command -v iptables >/dev/null 2>&1; then
+install_nftables() {
+    if command -v nft >/dev/null 2>&1; then
         return 0
     fi
 
@@ -288,13 +421,13 @@ install_iptables() {
 
     case "$DISTRO" in
         debian)
-            apt-get update && apt-get install -y iptables || return 1
+            apt-get update && apt-get install -y nftables || return 1
             ;;
         fedora)
-            dnf update -y && dnf install -y iptables || return 1
+            dnf update -y && dnf install -y nftables || return 1
             ;;
         arch)
-            pacman -Syu --noconfirm iptables || return 1
+            pacman -Syu --noconfirm nftables || return 1
             ;;
         *)
             echo " [-] Unsupported distribution. Please install iptables manually."
@@ -302,7 +435,7 @@ install_iptables() {
             ;;
     esac
 
-    if command -v iptables >/dev/null 2>&1; then
+    if command -v nft >/dev/null 2>&1; then
         echo " [+] iptables installed successfully."
         clear
         return 0
@@ -324,7 +457,7 @@ main() {
          exit 1
     fi
 
-    if ! install_iptables; then
+    if ! install_nftables; then
          exit 1
     fi
    

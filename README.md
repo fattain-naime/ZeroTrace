@@ -24,7 +24,7 @@ This tool is made only for ethical hacking, privacy, and educational use. Do not
 ## Requirements
 - **Gnu Bash**
 - **Linux distros like Debian, RHEL, Arch** 
-- **Tor, jq  and iptables (automatically installed if not found)**
+- **Tor, jq  and nftables (automatically installed if not found)**
 
 ---
 
