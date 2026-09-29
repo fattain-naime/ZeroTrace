@@ -150,7 +150,7 @@ EOF
    # Apply Firewall Blocks for Major Public DoH Resolver IPs on Port 443
     if command -v nft >/dev/null 2>&1; then
         nft -f - <<EOF >/dev/null 2>&1 || true
-table inet ghostroute {
+table ip ghostroute__gr {
     set doh_providers {
         type ipv4_addr
         flags interval
