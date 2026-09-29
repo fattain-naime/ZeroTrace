@@ -417,7 +417,7 @@ install_nftables() {
         return 0
     fi
 
-    echo " [*] iptables is not installed. Attempting to install iptables..."
+    echo " [*] nftables is not installed. Attempting to install nftables..."
 
     case "$DISTRO" in
         debian)
@@ -430,17 +430,17 @@ install_nftables() {
             pacman -Syu --noconfirm nftables || return 1
             ;;
         *)
-            echo " [-] Unsupported distribution. Please install iptables manually."
+            echo " [-] Unsupported distribution. Please install nftables manually."
             return 1
             ;;
     esac
 
     if command -v nft >/dev/null 2>&1; then
-        echo " [+] iptables installed successfully."
+        echo " [+] nftables installed successfully."
         clear
         return 0
     else
-        echo " [-] iptables installation failed."
+        echo " [-] nftables installation failed."
         return 1
     fi
 }
